@@ -1,0 +1,8 @@
+[package]
+name = "maze"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+const-random = "0.1.18"
+rand = "0.8.5"

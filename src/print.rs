@@ -170,7 +170,7 @@ pub fn print_real_maze_uo(arr: &[[(bool, [bool; 4]); WIDTH]; HEIGHT]) {
 
 pub fn maze_print_speed_test(maze: &[[(bool, [bool; 4]); WIDTH]; HEIGHT], times: u128){
 
-    let mut elasped_time = [0u128; 11];
+    let mut elasped_time = [0u128; 12];
     let print_funcs = [
         print_maze, print_maze_o, print_maze_o2, print_maze_oo, 
         print_maze_ooo, branched_print_maze, branched_print_maze_o, branched_print_maze_oo, best_print_maze, print_real_maze_uo
@@ -184,13 +184,20 @@ pub fn maze_print_speed_test(maze: &[[(bool, [bool; 4]); WIDTH]; HEIGHT], times:
         }
     }
 
-    let mut maze = maze_logic::Maze_r::new();
+    let maze = maze_logic::Maze_r::new();
+    let maze_o = maze_logic::Maze_ro::new();
 
 
     for _ in 0..times{
         let now = Instant::now();
         maze.print();
         elasped_time[10] += now.elapsed().as_micros();
+    }
+
+    for _ in 0..times{
+        let now = Instant::now();
+        maze_o.print();
+        elasped_time[11] += now.elapsed().as_micros();
     }
 
     println!("branchless print time in ms {}", elasped_time[0] / times);
@@ -204,4 +211,5 @@ pub fn maze_print_speed_test(maze: &[[(bool, [bool; 4]); WIDTH]; HEIGHT], times:
     println!("real print no struct time in ms {}", elasped_time[8] / times);
     println!("real print no struct uo time in ms {}", elasped_time[9] / times);
     println!("real print w/ struct time in ms {}", elasped_time[10] / times);
+    println!("real print w/ struct  optimized time in ms {}", elasped_time[11] / times);
 }

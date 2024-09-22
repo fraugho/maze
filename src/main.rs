@@ -1,8 +1,10 @@
 use rand::prelude::*;
 use const_random::const_random;
 use std::mem;
-use std::io::{self, Write};
+use std::io::{self, Write, BufWriter};
 use std::time::*;
+use serde_json;
+use std::fs::File;
 
 mod print;
 mod constants;
@@ -16,7 +18,8 @@ use maze_logic::*;
 
 fn main() {
 
-    let mut rand = thread_rng();
+    let mut rng = thread_rng();
+    let x = rng.gen::<u8>();
 
     let mut maze_ = [[(false, [false; 4]); WIDTH as usize]; HEIGHT as usize];
 
@@ -29,15 +32,43 @@ fn main() {
     */
 
     //print::maze_print_speed_test(&maze_, 10000);
-    let mut maze = Maze::new(WIDTH, HEIGHT);
+    //let mut maze = Maze::new(WIDTH, HEIGHT);
+    //
+    /*
+    let mut maze = Maze::new(rng.gen::<u8>() as usize, rng.gen::<u8>() as usize);
+
     maze.print();
     maze.gen_maze();
     maze.print();
-
-
-
-    //println!("DOD: {}, No DOD {}", maze.get_size(), mem::size_of_val(&maze_));
-
-    //let map = [[(false, [false; 4]); WIDTH as usize]; HEIGHT as usize];
+    */
+    make_dataset("demo.txt", 10);
 }
 
+fn make_dataset(file_name: &str, size: u32){
+    let mut rng = thread_rng();
+    let file = File::create(file_name).expect("failed to create file");
+    let mut writer = BufWriter::new(file);
+
+    for _ in 0..size {
+        let mut maze = Maze::new(rng.gen::<u8>() as usize, rng.gen::<u8>() as usize);
+        maze.gen_maze();
+        maze.set_pos();
+        //maze.solve();
+        maze.bfs_solve();
+        /*
+        maze.print();
+        if (!maze.ideal_path.is_empty()){
+            if (maze.can_follow_path()){
+                println!("Solved");
+            }
+        }
+        else {
+            println!("Can Not Solve");
+        }
+        maze.print_pos();
+        */
+
+        let line = serde_json::to_string(&maze).unwrap();
+        writeln!(writer, "{}", line).expect("was not able to write to file");
+    }
+}

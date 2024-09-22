@@ -29,7 +29,8 @@ fn main() {
     */
 
     //print::maze_print_speed_test(&maze_, 10000);
-    let mut maze = Maze::new();
+    let mut maze = Maze::new(WIDTH, HEIGHT);
+    maze.print();
     maze.gen_maze();
     maze.print();
 

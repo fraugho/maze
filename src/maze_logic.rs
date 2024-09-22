@@ -5,6 +5,7 @@ use rand::rngs::ThreadRng;
 use crate::constants::*;
 use serde::{Serialize, Deserialize};
 use rand::prelude::SliceRandom;
+use ndarray::Array2;
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Direction {
@@ -27,14 +28,14 @@ impl Direction {
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Maze {
-    width: usize,
-    height: usize,
-    cells: Vec<bool>,
-    r_walls: Vec<bool>,
-    b_walls: Vec<bool>,
+    pub width: usize,
+    pub height: usize,
+    pub cells: Vec<bool>,
+    pub r_walls: Vec<bool>,
+    pub b_walls: Vec<bool>,
     pub ideal_path: Vec<(i8,i8)>,
-    start_pos: (u8, u8),
-    end_pos: (u8, u8),
+    pub start_pos: (u8, u8),
+    pub end_pos: (u8, u8),
 }
 impl Maze {
     pub fn new(width: usize, height: usize) -> Self {
@@ -51,13 +52,19 @@ impl Maze {
         }
     }
 
-    pub fn set_pos(&mut self){
+    pub fn set_pos(&mut self) {
         let mut rng = rand::thread_rng();
-        loop{
-            self.start_pos = (rng.gen::<u8>()%(self.width as u8), rng.gen::<u8>()%(self.height as u8));
-            self.end_pos = (rng.gen::<u8>()%(self.width as u8), rng.gen::<u8>()%(self.height as u8));
-            if self.start_pos != self.end_pos{
-                return;
+        loop {
+            self.start_pos = (
+                rng.gen_range(0..self.width) as u8,
+                rng.gen_range(0..self.height) as u8
+            );
+            self.end_pos = (
+                rng.gen_range(0..self.width) as u8,
+                rng.gen_range(0..self.height) as u8
+            );
+            if self.start_pos != self.end_pos {
+                break;
             }
         }
     }
@@ -188,6 +195,50 @@ impl Maze {
             }
         }
         cur_pos == self.end_pos
+    }
+
+
+    fn interpret_model_output(&mut self, output: Array2<f32>) -> bool {
+        let threshold = 0.5;
+        let mut path = Vec::new();
+        let mut current_pos = self.start_pos;
+
+        while current_pos != self.end_pos {
+            let (x, y) = (current_pos.0 as usize, current_pos.1 as usize);
+            let directions = [(-1, 0), (1, 0), (0, -1), (0, 1)];
+            
+            let mut best_direction = None;
+            let mut best_value = f32::NEG_INFINITY;
+
+            for &dir in &directions {
+                let new_x = x as i32 + dir.0 as i32;
+                let new_y = y as i32 + dir.1 as i32;
+
+                if new_x >= 0 && new_x < self.width as i32 && 
+                   new_y >= 0 && new_y < self.height as i32 &&
+                   output[[new_y as usize, new_x as usize]] > threshold &&
+                   self.can_move_path(current_pos, dir)
+                {
+                    let value = output[[new_y as usize, new_x as usize]];
+                    if value > best_value {
+                        best_value = value;
+                        best_direction = Some(dir);
+                    }
+                }
+            }
+
+            match best_direction {
+                Some(dir) => {
+                    path.push(dir);
+                    current_pos.0 = current_pos.0.wrapping_add(dir.0 as u8);
+                    current_pos.1 = current_pos.1.wrapping_add(dir.1 as u8);
+                },
+                None => return false, // No valid path found
+            }
+        }
+
+        self.ideal_path = path;
+        self.can_follow_path()
     }
 
     pub fn get_size(&self) -> usize {

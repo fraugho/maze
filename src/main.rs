@@ -41,7 +41,8 @@ fn main() {
     maze.gen_maze();
     maze.print();
     */
-    make_dataset("demo.txt", 10);
+    //make_dataset("demo.txt", 100000);
+    make_dataset("demo2.txt", 10000);
 }
 
 fn make_dataset(file_name: &str, size: u32){
@@ -49,8 +50,8 @@ fn make_dataset(file_name: &str, size: u32){
     let file = File::create(file_name).expect("failed to create file");
     let mut writer = BufWriter::new(file);
 
-    for _ in 0..size {
-        let mut maze = Maze::new(rng.gen::<u8>() as usize, rng.gen::<u8>() as usize);
+    for i in 0..size {
+        let mut maze = Maze::new(rng.gen_range(1..=255) as usize, rng.gen_range(1..=255) as usize);
         maze.gen_maze();
         maze.set_pos();
         //maze.solve();
@@ -58,17 +59,20 @@ fn make_dataset(file_name: &str, size: u32){
         /*
         maze.print();
         if (!maze.ideal_path.is_empty()){
-            if (maze.can_follow_path()){
-                println!("Solved");
-            }
+        if (maze.can_follow_path()){
+        println!("Solved");
+        }
         }
         else {
-            println!("Can Not Solve");
+        println!("Can Not Solve");
         }
         maze.print_pos();
         */
 
         let line = serde_json::to_string(&maze).unwrap();
         writeln!(writer, "{}", line).expect("was not able to write to file");
+        if (i % 1000 == 0){
+            println!("{}", i);
+        }
     }
 }

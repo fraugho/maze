@@ -1,5 +1,5 @@
 use std::{io::{self, Write}, mem};
-use std::collections::{HashSet, HashMap, VecDeque};
+use std::collections::{HashSet, VecDeque};
 use rand::*;
 use rand::rngs::ThreadRng;
 use crate::constants::*;
@@ -14,7 +14,6 @@ pub enum Direction {
     Up,
     Down,
 }
-
 impl Direction {
     fn to_offset(&self) -> (i16, i16) {
         match self {
@@ -26,7 +25,7 @@ impl Direction {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Maze {
     pub width: usize,
     pub height: usize,
@@ -198,48 +197,60 @@ impl Maze {
     }
 
 
-    fn interpret_model_output(&mut self, output: Array2<f32>) -> bool {
-        let threshold = 0.5;
-        let mut path = Vec::new();
-        let mut current_pos = self.start_pos;
+pub fn interpret_model_output(&mut self, output: Array2<f32>) -> bool {
+    let threshold = 0.5;  // You might need to adjust this based on the normalized output
+    let mut path = Vec::new();
+    let mut current_pos = self.start_pos;
 
-        while current_pos != self.end_pos {
-            let (x, y) = (current_pos.0 as usize, current_pos.1 as usize);
-            let directions = [(-1, 0), (1, 0), (0, -1), (0, 1)];
-            
-            let mut best_direction = None;
-            let mut best_value = f32::NEG_INFINITY;
+    println!("Start position: {:?}", current_pos);
+    println!("End position: {:?}", self.end_pos);
 
-            for &dir in &directions {
-                let new_x = x as i32 + dir.0 as i32;
-                let new_y = y as i32 + dir.1 as i32;
+    while current_pos != self.end_pos {
+        let (x, y) = (current_pos.0 as usize, current_pos.1 as usize);
+        let directions = [(-1, 0), (1, 0), (0, -1), (0, 1)];
+        
+        let mut best_direction = None;
+        let mut best_value = f32::NEG_INFINITY;
 
-                if new_x >= 0 && new_x < self.width as i32 && 
-                   new_y >= 0 && new_y < self.height as i32 &&
-                   output[[new_y as usize, new_x as usize]] > threshold &&
-                   self.can_move_path(current_pos, dir)
-                {
-                    let value = output[[new_y as usize, new_x as usize]];
+        println!("Current position: {:?}", current_pos);
+
+        for &dir in &directions {
+            let new_x = x as i32 + dir.0;
+            let new_y = y as i32 + dir.1;
+
+            if new_x >= 0 && new_x < self.width as i32 && 
+               new_y >= 0 && new_y < self.height as i32
+            {
+                let value = output[[new_y as usize, new_x as usize]];
+                println!("Direction {:?}: value = {}, threshold = {}", dir, value, threshold);
+
+                if value > threshold && self.can_move_path(current_pos, (dir.0 as i8, dir.1 as i8)) {
                     if value > best_value {
                         best_value = value;
                         best_direction = Some(dir);
                     }
                 }
             }
-
-            match best_direction {
-                Some(dir) => {
-                    path.push(dir);
-                    current_pos.0 = current_pos.0.wrapping_add(dir.0 as u8);
-                    current_pos.1 = current_pos.1.wrapping_add(dir.1 as u8);
-                },
-                None => return false, // No valid path found
-            }
         }
 
-        self.ideal_path = path;
-        self.can_follow_path()
+        match best_direction {
+            Some(dir) => {
+                println!("Chosen direction: {:?}", dir);
+                path.push((dir.0 as i8, dir.1 as i8));
+                current_pos.0 = current_pos.0.wrapping_add(dir.0 as u8);
+                current_pos.1 = current_pos.1.wrapping_add(dir.1 as u8);
+            },
+            None => {
+                println!("No valid direction found. Terminating path.");
+                return false; // No valid path found
+            }
+        }
     }
+
+    println!("Path found: {:?}", path);
+    self.ideal_path = path;
+    true
+}
 
     pub fn get_size(&self) -> usize {
         mem::size_of::<Self>()
@@ -334,121 +345,6 @@ impl Maze {
 
         handle.write_all(&buffer).unwrap();
         handle.flush().unwrap();
-    }
-
-    pub fn gen_maze(&mut self) {
-        let mut visited: HashSet<(usize, usize)> = HashSet::new();
-        let mut rng = thread_rng();
-        let start_pos: [usize;2]  = [rng.gen_range(0..self.width), rng.gen_range(0..self.height)];
-        self.recursive_backtrack(start_pos[0], start_pos[1], &mut visited, &mut rng);
-    }
-
-    fn recursive_backtrack(&mut self, x: usize, y: usize, visited: &mut HashSet<(usize, usize)>, rng: &mut ThreadRng) {
-        visited.insert((x, y));
-        self.cells[y * self.width + x] = true;  // Mark as path
-
-        let directions = [(0, -1), (1, 0), (0, 1), (-1, 0)];
-        let mut shuffled_directions = directions.to_vec();
-        shuffled_directions.shuffle(rng);
-
-        for (dx, dy) in shuffled_directions {
-            let next_x = x as i32 + dx;
-            let next_y = y as i32 + dy;
-
-            //checks if the position it is trying to go it is 
-            //past top, bottom, left, and right walls
-
-            if next_x >= 0 && next_x < self.width as i32 && next_y >= 0 && next_y < self.height as i32 
-            && !visited.contains(&(next_x as usize, next_y as usize)) {
-                // Remove wall between current cell and next cell
-                let wall_x = x as i32;
-                let wall_y = y as i32;
-                self.remove_wall(wall_x as usize, wall_y as usize, (dx, dy));
-
-                self.recursive_backtrack(next_x as usize, next_y as usize, visited, rng);
-            }
-        }
-    }
-
-    fn remove_wall(&mut self, x: usize, y: usize, direction: (i32,i32)) {
-        match direction {
-            //UP
-            (0, -1) => self.b_walls[(y - 1) * self.width + x] = true,
-            //RIGHT
-            (1, 0) => self.r_walls[y * self.width + x] = true,
-            //DOWN
-            (0, 1) => self.b_walls[y * self.width + x] = true,
-            //LEFT
-            (-1, 0) => self.r_walls[y * self.width + x - 1] = true,
-            _ => panic!("invalid direction (fn remove_wall)"),
-        }
-    }
-}
-
-//I was thinking of using just a regular array because of json serialztion
-pub struct Maze_ndod {
-    width: usize,
-    height: usize,
-    cells: Vec<bool>,
-    //l_walls: [bool; self.width * self.height],
-    r_walls: Vec<bool>,
-    //t_walls: [bool; self.width * self.height],
-    b_walls: Vec<bool>,
-}
-impl Maze_ndod {
-    pub fn new(width: usize, height: usize) -> Self {
-        let size: usize = width * height;
-        return Maze_ndod { 
-            width,
-            height,
-            cells: vec![false; size],
-            //l_walls: vec![false; size],
-            r_walls: vec![false; size],
-            //t_walls: [false; size],
-            b_walls: vec![false; size],
-        }
-    }
-    pub fn get_size(&self) -> usize {
-        mem::size_of::<Self>()
-    }
-    pub fn print(&self) {
-        let stdout = io::stdout();
-        let mut handle = stdout.lock();
-        //self.width * 3 accounts for cell and r_wall and b_wall
-        // + self.height is for \n
-        let mut buffer: Vec<u8> = Vec::with_capacity((self.width * 4 * self.height + self.height) as usize);
-        let wall_option = [b'|', b' '];
-        let cell_option = [b'*', b' '];
-        let floor_option = [b'-', b' '];
-        let floor = vec![b'-'; self.width];
-        let space = vec![b' '; self.width];
-        let ceiling = floor.iter().zip(space).flat_map(|(&floor, space)| [floor, space]).collect::<Vec<u8>>();
-        //let floor: Vec<u8> = (0..self.width*2).map(|i| if i % 2 == 0 { b'_' } else { b' ' }).collect();
-        //let floor: [u8; self.width] = core::array::from_fn(|i| b"_"[i & 1]);
-
-        buffer.extend(ceiling.iter());
-        buffer.push(b'\n');
-        for row in 0..self.height{
-            let cell_slice = &self.cells[(self.height*row)..(self.height*row + self.width)];
-            let r_wall_slice = &self.r_walls[(self.height*row)..(self.height*row + self.width)];
-            let b_wall_slice = &self.b_walls[(self.height*row)..(self.height*row + self.width)];
-            buffer.extend(cell_slice
-                .iter()
-                .zip(r_wall_slice.iter())
-                .flat_map(|(&cell, &wall)| [cell_option[cell as usize], wall_option[wall as usize]]));
-            buffer.push(b'\n');
-            buffer.extend(b_wall_slice.iter().flat_map(|&floor| [floor_option[floor as usize], b' ']));
-            //buffer.extend_from_slice(&floor);
-            buffer.push(b'\n');
-        }
-
-        handle.write_all(&buffer).unwrap();
-        handle.flush().unwrap();
-    }
-
-
-    fn is_not_outer_wall(&self, x: usize, y: usize) -> bool {
-        x > 0 && x < self.width - 1 && y > 0 && y < self.height - 1
     }
 
     pub fn gen_maze(&mut self) {

@@ -109,7 +109,7 @@ pub fn branched_print_maze_oo(arr: &[[(bool, [bool; 4]); WIDTH]; HEIGHT]) {
 }
 
 
-pub fn best_print_maze(arr: &[[(bool, [bool; 4]); WIDTH]; HEIGHT]) {
+pub fn detailed_maze_print(arr: &[[(bool, [bool; 4]); WIDTH]; HEIGHT]) {
     let stdout = io::stdout();
     let mut handle = stdout.lock();
 
@@ -173,7 +173,7 @@ pub fn maze_print_speed_test(maze: &[[(bool, [bool; 4]); WIDTH]; HEIGHT], times:
     let mut elasped_time = [0u128; 12];
     let print_funcs = [
         print_maze, print_maze_o, print_maze_o2, print_maze_oo, 
-        print_maze_ooo, branched_print_maze, branched_print_maze_o, branched_print_maze_oo, best_print_maze, print_real_maze_uo
+        print_maze_ooo, branched_print_maze, branched_print_maze_o, branched_print_maze_oo, detailed_maze_print, print_real_maze_uo
     ];
 
     for (order,func) in print_funcs.iter().enumerate(){

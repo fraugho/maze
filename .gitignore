@@ -4,3 +4,4 @@ demo2.txt
 demo3.txt
 demo4.txt
 model_outputs.json
+maze_solver_model_100k.onnx

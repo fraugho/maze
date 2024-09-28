@@ -213,3 +213,16 @@ pub fn maze_print_speed_test(maze: &[[(bool, [bool; 4]); WIDTH]; HEIGHT], times:
     println!("real print w/ struct time in ms {}", elasped_time[10] / times);
     println!("real print w/ struct  optimized time in ms {}", elasped_time[11] / times);
 }
+
+pub fn print_speed_test(){
+    let mut rng = thread_rng();
+    let mut maze_ = [[(false, [false; 4]); WIDTH as usize]; HEIGHT as usize];
+
+    for row in maze_.iter_mut() {
+        for cell in row.iter_mut() {
+            cell.0 = rng.gen_bool(0.5);
+        }
+    }
+
+    maze_print_speed_test(&maze_, 10000);
+}

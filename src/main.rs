@@ -9,7 +9,6 @@ use std::thread;
 mod print;
 mod constants;
 mod maze_logic;
-mod model_tester;
 
 use constants::*;
 use maze_logic::*;
@@ -23,26 +22,17 @@ fn main() {
     }
     */
     let mut now = Instant::now();
-    mt_make_dataset("demo3.txt", 100);
-    println!("mt took {} ms", now.elapsed().as_micros());
+    mt_make_dataset("test.json", 1000000);
+    println!("mt took {} s", now.elapsed().as_secs_f64());
     now = Instant::now();
-    make_dataset("demo4.txt", 100);
-    println!("st took {} ms", now.elapsed().as_micros());
+    make_dataset("tests.json", 1000000);
+    println!("st took {} s", now.elapsed().as_secs_f64());
     //print_speed_test();
+    //let mut maze = Maze::new(9,9);
+    //maze.bfs_solve();
+    //println!("can fallow path: {:?}", maze.can_follow_path());
 }
 
-fn print_speed_test(){
-    let mut rng = thread_rng();
-    let mut maze_ = [[(false, [false; 4]); WIDTH as usize]; HEIGHT as usize];
-
-    for row in maze_.iter_mut() {
-        for cell in row.iter_mut() {
-            cell.0 = rng.gen_bool(0.5);
-        }
-    }
-
-    print::maze_print_speed_test(&maze_, 10000);
-}
 fn mt_make_dataset(file_name: &str, size: usize) {
     let num_cpus = num_cpus::get();
     let times = size / num_cpus;
@@ -57,14 +47,18 @@ fn mt_make_dataset(file_name: &str, size: usize) {
 
     for i in 0..num_cpus {
         let times = thread_times[i];
+
         let handle = thread::spawn(move || {
-            let mut rng = thread_rng();
-            let mut local_maze = Vec::new(); // Local vector for this thread
-            
+            //let mut rng = thread_rng();
+            let mut local_maze = Vec::with_capacity(times); // Local vector for this thread
+
             // Generate mazes
-            for _ in 0..times {
-                let mut maze = Maze::new(rng.gen_range(1..=MAX_MAZE_SIZE) as usize, rng.gen_range(1..=MAX_MAZE_SIZE) as usize);
-                maze.gen_maze();
+            for j in 0..times {
+                if j % 99 == 0 {
+                    //println!("Thread {} generated {} mazes", i, j);
+                }
+                //let mut maze = Maze::new(rng.gen_range(1..=MAX_MAZE_SIZE) as usize, rng.gen_range(1..=MAX_MAZE_SIZE) as usize);
+                let mut maze = Maze::new(9, 9);
                 maze.set_pos();
                 maze.bfs_solve();
                 local_maze.push(maze);
@@ -75,6 +69,7 @@ fn mt_make_dataset(file_name: &str, size: usize) {
     }
 
     // Collect all the mazes from threads
+
     for (i, handle) in handles.into_iter().enumerate() {
         let local_mazes = handle.join().unwrap(); // Get the result from the thread
         mazes[i] = local_mazes; // Store it in the main mazes vector
@@ -99,9 +94,10 @@ fn make_dataset(file_name: &str, size: usize){
     let mut writer = BufWriter::new(file);
 
     for i in 0..size {
-        let mut maze = Maze::new(rng.gen_range(1..=MAX_MAZE_SIZE) as usize, rng.gen_range(1..=255) as usize);
-        maze.gen_maze();
-        maze.set_pos();
+        //let mut maze = Maze::new(rng.gen_range(1..=MAX_MAZE_SIZE) as usize, rng.gen_range(1..=255) as usize);
+        let mut maze = Maze::new(9, 9);
+        //maze.gen_maze();
+        //maze.set_pos();
         //maze.solve();
         maze.bfs_solve();
         /*
@@ -119,8 +115,10 @@ fn make_dataset(file_name: &str, size: usize){
 
         let line = serde_json::to_string(&maze).unwrap();
         writeln!(writer, "{}", line).expect("was not able to write to file");
+        /*
         if i % 1000 == 0 {
             println!("{}", i);
         }
+        */
     }
 }

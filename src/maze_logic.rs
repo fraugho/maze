@@ -5,7 +5,6 @@ use rand::rngs::ThreadRng;
 use crate::constants::*;
 use serde::{Serialize, Deserialize};
 use rand::prelude::SliceRandom;
-use ndarray::Array2;
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Direction {
@@ -39,16 +38,19 @@ pub struct Maze {
 impl Maze {
     pub fn new(width: usize, height: usize) -> Self {
         let size: usize = width * height;
-        return Maze {
+        let mut maze = Maze {
             width,
             height,
             cells: vec![false; size],
-            r_walls: vec![false; size],
-            b_walls: vec![false; size],
+            r_walls: vec![true; size],
+            b_walls: vec![true; size],
             ideal_path: vec![],
             start_pos: (0, 0),
             end_pos: (0, 0),
-        }
+        };
+        maze.set_pos();
+        maze.gen_maze();
+        return maze;
     }
 
     pub fn set_pos(&mut self) {
@@ -116,69 +118,28 @@ impl Maze {
         None
     }
 
-    pub fn solve(&mut self) {
-        let mut visited = HashSet::new();
-        if let Some(answer) = self.solve_helper(self.start_pos, &mut visited) {
-            self.ideal_path = answer
-                .iter()
-                .rev()
-                .map(|direction| match direction {
-                    Direction::Left => (-1, 0),
-                    Direction::Right => (1, 0),
-                    Direction::Up => (0, -1),
-                    Direction::Down => (0, 1),
-                })
-                .collect()
-        }
-    }
-
     pub fn is_edge(&self, cur_pos: &(u8, u8), direction: &(i16, i16)) -> bool {
         let new_pos = (cur_pos.0 as i16 + direction.0, cur_pos.1 as i16 + direction.1);
         new_pos.0 < 0 || new_pos.1 < 0 || new_pos.0 >= self.width as i16 || new_pos.1 >= self.height as i16
     }
 
-    fn solve_helper(&self, cur_pos: (u8, u8), visited: &mut HashSet<(u8, u8)>) -> Option<Vec<Direction>> {
-        if cur_pos == self.end_pos {
-            return Some(vec![]);
-        }
-        if !visited.insert(cur_pos) {
-            return None;
-        }
-        let directions = [Direction::Left, Direction::Right, Direction::Up, Direction::Down];
-
-        for direction in directions.iter() {
-            let (dx, dy) = direction.to_offset();
-            let new_pos = (cur_pos.0 as i16 + dx, cur_pos.1 as i16 + dy);
-
-            if !self.is_edge(&cur_pos, &(dx, dy)) && self.can_move(cur_pos, *direction) {
-                let new_pos = (new_pos.0 as u8, new_pos.1 as u8);
-                if let Some(mut path) = self.solve_helper(new_pos, visited) {
-                    path.push(*direction);
-                    return Some(path);
-                }
-            }
-        }
-        visited.remove(&cur_pos);  // Backtrack
-        None
-    }
-
     fn can_move(&self, pos: (u8, u8), direction: Direction) -> bool {
         let (x, y) = (pos.0 as usize, pos.1 as usize);
         match direction {
-            Direction::Left => x > 0 && self.r_walls[y * self.width + x - 1],
-            Direction::Right => x < self.width - 1 && self.r_walls[y * self.width + x],
+            Direction::Left => x > 0 && !self.r_walls[y * self.width + x - 1],
+            Direction::Right => x < self.width - 1 && !self.r_walls[y * self.width + x],
             Direction::Up => y > 0 && self.b_walls[(y - 1) * self.width + x],
-            Direction::Down => y < self.height - 1 && self.b_walls[y * self.width + x],
+            Direction::Down => y < self.height - 1 && !self.b_walls[y * self.width + x],
         }
     }
 
     fn can_move_path(&self, pos: (u8, u8), direction: (i8, i8)) -> bool {
         let (x, y) = (pos.0 as usize, pos.1 as usize);
         match direction {
-            (-1, 0) => x > 0 && self.r_walls[y * self.width + x - 1],
-            (1, 0) => x < self.width - 1 && self.r_walls[y * self.width + x],
-            (0, -1) => y > 0 && self.b_walls[(y - 1) * self.width + x],
-            (0, 1) => y < self.height - 1 && self.b_walls[y * self.width + x],
+            (-1, 0) => x > 0 && !self.r_walls[y * self.width + x - 1],
+            (1, 0) => x < self.width - 1 && !self.r_walls[y * self.width + x],
+            (0, -1) => y > 0 && !self.b_walls[(y - 1) * self.width + x],
+            (0, 1) => y < self.height - 1 && !self.b_walls[y * self.width + x],
             _ => false,
         }
     }
@@ -196,72 +157,13 @@ impl Maze {
         cur_pos == self.end_pos
     }
 
-
-pub fn interpret_model_output(&mut self, output: Array2<f32>) -> bool {
-    let threshold = 0.5;  // You might need to adjust this based on the normalized output
-    let mut path = Vec::new();
-    let mut current_pos = self.start_pos;
-
-    println!("Start position: {:?}", current_pos);
-    println!("End position: {:?}", self.end_pos);
-
-    while current_pos != self.end_pos {
-        let (x, y) = (current_pos.0 as usize, current_pos.1 as usize);
-        let directions = [(-1, 0), (1, 0), (0, -1), (0, 1)];
-        
-        let mut best_direction = None;
-        let mut best_value = f32::NEG_INFINITY;
-
-        println!("Current position: {:?}", current_pos);
-
-        for &dir in &directions {
-            let new_x = x as i32 + dir.0;
-            let new_y = y as i32 + dir.1;
-
-            if new_x >= 0 && new_x < self.width as i32 && 
-               new_y >= 0 && new_y < self.height as i32
-            {
-                let value = output[[new_y as usize, new_x as usize]];
-                println!("Direction {:?}: value = {}, threshold = {}", dir, value, threshold);
-
-                if value > threshold && self.can_move_path(current_pos, (dir.0 as i8, dir.1 as i8)) {
-                    if value > best_value {
-                        best_value = value;
-                        best_direction = Some(dir);
-                    }
-                }
-            }
-        }
-
-        match best_direction {
-            Some(dir) => {
-                println!("Chosen direction: {:?}", dir);
-                path.push((dir.0 as i8, dir.1 as i8));
-                current_pos.0 = current_pos.0.wrapping_add(dir.0 as u8);
-                current_pos.1 = current_pos.1.wrapping_add(dir.1 as u8);
-            },
-            None => {
-                println!("No valid direction found. Terminating path.");
-                return false; // No valid path found
-            }
-        }
-    }
-
-    println!("Path found: {:?}", path);
-    self.ideal_path = path;
-    true
-}
-
-    pub fn get_size(&self) -> usize {
-        mem::size_of::<Self>()
-    }
     pub fn print(&self) {
         let stdout = io::stdout();
         let mut handle = stdout.lock();
         let mut buffer: Vec<u8> = Vec::with_capacity((self.width * 4 * self.height + self.height) as usize);
-        let wall_option = [b'|', b' '];
-        let cell_option = [b'*', b' '];
-        let floor_option = [b'-', b' '];
+        let wall_option = [b' ', b'|'];
+        let cell_option = [b' ', b'*'];
+        let floor_option = [b' ', b'-'];
         let floor = vec![b'-'; self.width];
         let space = vec![b' '; self.width];
         let ceiling = space.iter().zip(floor).flat_map(|(&floor, space)| [floor, space]).collect::<Vec<u8>>();
@@ -330,18 +232,18 @@ pub fn interpret_model_output(&mut self, output: Array2<f32>) -> bool {
             buffer.push(b'\n');
         }
 
-    // Calculate correct indices for start and end positions
-    let start_index = ceiling.len() + 1 + // Account for ceiling and first newline
-                      (self.width * 2 + 2) * (self.start_pos.1) as usize + // Account for full rows
-                      1 + self.start_pos.0 as usize * 2; // Account for first '|' and position within row
+        // Calculate correct indices for start and end positions
+        let start_index = ceiling.len() + 1 + // Account for ceiling and first newline
+        (self.width * 2 + 2) * (self.start_pos.1) as usize + // Account for full rows
+        1 + self.start_pos.0 as usize * 2; // Account for first '|' and position within row
 
-    let end_index = ceiling.len() + 1 +
-                    (self.width * 2 + 2) * (self.end_pos.1 ) as usize + 
-                    1 + self.end_pos.0 as usize * 2;
+        let end_index = ceiling.len() + 1 +
+        (self.width * 2 + 2) * (self.end_pos.1 ) as usize + 
+        1 + self.end_pos.0 as usize * 2;
 
-    // Place start and end markers
-    buffer[start_index] = b'S';
-    buffer[end_index] = b'E';
+        // Place start and end markers
+        buffer[start_index] = b'S';
+        buffer[end_index] = b'E';
 
         handle.write_all(&buffer).unwrap();
         handle.flush().unwrap();
@@ -384,13 +286,13 @@ pub fn interpret_model_output(&mut self, output: Array2<f32>) -> bool {
     fn remove_wall(&mut self, x: usize, y: usize, direction: (i32,i32)) {
         match direction {
             //UP
-            (0, -1) => self.b_walls[(y - 1) * self.width + x] = true,
+            (0, -1) => self.b_walls[(y - 1) * self.width + x] = false,
             //RIGHT
-            (1, 0) => self.r_walls[y * self.width + x] = true,
+            (1, 0) => self.r_walls[y * self.width + x] = false,
             //DOWN
-            (0, 1) => self.b_walls[y * self.width + x] = true,
+            (0, 1) => self.b_walls[y * self.width + x] = false,
             //LEFT
-            (-1, 0) => self.r_walls[y * self.width + x - 1] = true,
+            (-1, 0) => self.r_walls[y * self.width + x - 1] = false,
             _ => panic!("invalid direction (fn remove_wall)"),
         }
     }
